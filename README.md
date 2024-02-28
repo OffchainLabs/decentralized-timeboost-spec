@@ -17,7 +17,7 @@
 
 **Generally**
 
-- the protocol goes in rounds, where each round makes a block (or blocks, if the transactions produced by the round won’t fit in a single block)
+- the protocol goes in rounds, where each round makes a block (or no block, if there are no transactions)
 - rounds are pipelined to the extent possible
 
 **Requirements**
