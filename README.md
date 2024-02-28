@@ -1,4 +1,4 @@
-# Decentralized fast-lane time boost sequencer
+# Decentralized express-lane time boost sequencer
 
 **Goals:**
 
@@ -92,4 +92,5 @@ In the absence of network disruptions, and with *N <= 20* committee members who 
 - *(3d) among the transactions produced by a round of the protocol and eventually included in blocks, every priority transaction is ordered before every non-priority transaction*
 - *(3e) among the priority transactions produced by a round of the protocol and eventually included in blocks, those transactions are in the order specified by the priority bundles*
 - *(3f) consecutive blocks have non-decreasing timestamps*
-- Step 4: if Step 3 produced a block, every honest committee member signs the block, and $2F+1$ signatures can be aggregated to form a certificate of consensus
+
+<u>Step 4</u>: if Step 3 produced a block, every honest committee member signs the block, and $2F+1$ signatures can be aggregated to form a certificate of consensus
