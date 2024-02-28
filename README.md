@@ -38,7 +38,7 @@ In the absence of network disruptions, and with *N <= 20* committee members who 
 <u>At the start of a round</u>, each honest committee member makes a “candidate list” of transactions and priority bundles that it has seen and wants to include in the round
 
 - priority bundles are added to an honest member’s candidate list as soon as they’re seen
-  - exception (arrival before epoch starts): if during epoch *i*, a priority bundle tagged with epoch *i+1* arrives, the honest member will buffer the priority bundle until the beginning of epoch *i*
+  - exception (arrival before epoch starts): if during epoch *i*, a priority bundle tagged with epoch *i+1* arrives, the honest member will buffer the priority bundle until the beginning of epoch *i+1*
   - exception (out of order arrivals): if a priority bundle with sequence number *N+1* arrives at an honest member, but that member has not yet seen sequence number *N*, then *N+1* is buffered by the member until *N* arrives, and *N+1* is treated as if it arrived simultaneously with *N*
 - honest members artificially delay non-priority transactions by a fixed delay period *D* (say, 200 milliseconds) before adding them to the candidate list
   - this rule is equivalent to saying that the deadline for inclusion in a round is *D* earlier for non-priority transactions than for priority bundles
