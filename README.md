@@ -173,7 +173,9 @@ Such a member should record the results of consensus rounds. If the first round 
 
   If any of the transactions or bundles in the inclusion list are encrypted, the committee member multicasts its decryption shares for the encrypted items. It then awaits the arrival of decryption shares from other committee members. As soon as it has received *F+1* decryption shares for an encrypted item (including its own share), it can use those shares to decrypt the item.
 
-  As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it passes the inclusion list, tagged with the round number, to the next, ordering phase. 
+  (Note that decryption of a non-priority transaction could lead to duplicate copies of the same transaction, because the result of decryption could be identical to a transaction that is already present. This cannot happen for priority bundles, nor for delayed inbox messages, because they have sequence numbers that have already been de-duplicated.)
+
+  As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it first de-duplicates the set of non-priority transactions by removing all but one instance of any transaction that is duplicated in the set, and then the member passes the de-duplicated inclusion list, tagged with the round number, to the next, ordering phase. 
 
   <u>State and recovery in the decryption phase</u>
 
@@ -188,21 +190,21 @@ Such a member should record the results of consensus rounds. If the first round 
   The inclusion lists from multiple rounds can be processed concurrently, however the results must be emitted from the ordering phase in round order.
 
   An honest member sorts the transactions and bundles in the inclusion list as follows:
-
+  
   - order all priority transactions or bundles ahead of all non-priority transactions
   - among the priority transactions or bundles, order according to the sequence number given by the priority controller, then break up each bundle into its constituent transactions (by SSZ-decoding the payload as a List[List, 1048576], 1024]), maintaining the order from the bundle
   - among the non-priority transactions, order according to Hash(seed || sender address), breaking remaining ties by nonce (increasing), breaking remaining ties by Hash(contents)
   - among the delayed-inbox transactions, order by arrival order in the L1 inbox
 
   At this point, the ordering phase waits until the ordering phases of all previous rounds have completed, and then:
-
+  
   - Pushes the transactions in order, and timestamped with the consensus timestamp from their inclusion list, into the input queue of the block building engine.
   - If the delayed inbox index of this round is P and the delayed inbox index of the previous round was Q, then push the delayed inbox transactions in the interval (Q, P], in increasing order by index, into the input queue of the block building engine. (Note that the interval might be empty.)
 
   This completes the ordering phase for the round.
 
   <u>State and recovery for the ordering phase</u>
-
+  
   Each round of the ordering phase is self-contained, and there is no state that needs to be remembered from one round to the next. So a member can execute the ordering phase for any round for which it knows the correct result of the decryption phase.
 
 **Block building engine**
