@@ -77,7 +77,7 @@ The inclusion phase operates on its own cadence, starting the next consensus rou
 
 **Inclusion phase**
 
-The inclusion phase uses the consensus sub-protocol, making a best effort to start the rounds of the consensus sub-protocol at 250 millisecond intervals, and never at less than a 250 millisecond interval. 
+The inclusion phase uses the consensus sub-protocol, making a best effort to start the rounds of the consensus sub-protocol at 250 millisecond intervals. 
 
 In each round of the consensus sub-protocol, each committee member submits a candidate list of transactions. The consensus round’s result is a list of *N-F* of the candidate lists submitted for that round (or no result, if the consensus round fails).
 
