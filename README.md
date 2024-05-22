@@ -112,7 +112,7 @@ When the consensus sub-protocol commits a result, all honest members use this co
     - Let S be the set of bundles from the current epoch with sequence number K+1
     - If S is empty, exit
     - Otherwise include the contents (calldata) of the member of S with smallest hash, increment K, and continue
-- All non-priority transactions that appeared in at least *F+1* of the candidate lists output by the consensus round, and did not appear in at least *F+1* of the candidate lists output by the previous successful round
+- All non-priority transactions that appeared in at least *F+1* of the candidate lists output by the consensus round, and for each of the previous 8 rounds, did not appear in at least *F+1* of the candidate lists output by that previous round
 
 If a consensus round fails, it produces no inclusion list, and the later phases of the protocol are not executed.
 
@@ -133,6 +133,7 @@ Members must keep the following state between rounds:
 - the consensus timestamp of that round; 
 - the consensus delayed inbox index of that round; 
 - the next expected priority bundle sequence number at the end of that round (i.e. the value of K+1 that caused the “S is empty” condition). 
+- hashes of all non-priority transactions that, in any of the previous 8 rounds, were seen in at least F+1 candidate lists produced by the consensus protocol for that round
 
 A member who knows this information can safely compute the consensus inclusion list of the next round, and can safely update its state for that next round. 
 
@@ -140,7 +141,13 @@ Members include their latest state information in the input, to help crashed/res
 
 If a member is recovering from a crash, or is newly joining the committee, it will not initially know the state, so it must initially participate only passively in the protocol: not submitting an input; casting votes in the core consensus protocol; not producing a local version of the consensus inclusion list (because it cannot be guaranteed correct); and not participating in later phases of the protocol.
 
-Such a member should record the results of consensus rounds. If the first round whose result it sees is R, then it should wait until it has enough information to deduce the state after round R-1 or any later round; then it can use the recorded round results to compute the current state. After doing this, the member will be in sync and can start participating actively in future rounds of the protocol, including computing the consensus inclusion list and passing on new information to later rounds of the protocol.
+Such a member should record the results of consensus rounds. To get its state into synchronization with other honest nodes, it must do the following:
+
+* observe at least one successful round, so it can synchronize its view of the last successful round number
+* observe at least 8 rounds, so it can synchronize its view of the list of hashes from previous rounds,
+* if the first successful round it observes is round R, observe until it has seen latest-inclusion-list information from at least F+1 members, that specify round number at least R-1 in each case (but can differ across the F+1 members), which together with the observed rounds, is sufficient to synchronize the consensus timestamp and consensus inbox index for the latest successful round
+
+After doing these things, the member will be in sync and can start participating actively in future rounds of the protocol, including computing the consensus inclusion list and passing on new information to later rounds of the protocol.
 
 **Guaranteed properties of the inclusion phase:**
 
