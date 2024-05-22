@@ -37,7 +37,7 @@ The details of the consensus sub-protocol are not specified here.
 
 **Background: threshold decryption**
 
-The protocol relies on a threshold encryption scheme that is not specified here. Transactions and bundles can be submitted in encrypted form, and these will be decrypted jointly by the members after their position in the sequencer’s output can no longer be manipulated.
+The protocol relies on a CCA-secure threshold encryption scheme that is not specified here. Transactions and bundles can be submitted in encrypted form, and these will be decrypted jointly by the members after their position in the sequencer’s output can no longer be manipulated.
 
 Each member of the sequencer committee holds a key share, and *F+1* decryption shares are needed to decrypt an encrypted item. 
 
