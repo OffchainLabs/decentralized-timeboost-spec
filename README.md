@@ -213,7 +213,15 @@ Each honest committee member runs an instance of the block building engine.
 
 The job of the block building engine is to consume timestamped transactions from its input queue and use them to build blocks. This uses the same block-building logic already included in “back end” of the current Arbitrum sequencer, which executes the transactions, filters out transactions that are invalid or unfunded, and packs the transactions into blocks. 
 
-This would use the ProduceBlockAdvanced function in the Nitro code, or something similar. However, the existing logic probably needs to be updated to be fully deterministic, for example to use the timestamps on transactions rather than reading the current clock.
+This would use the ProduceBlockAdvanced function in the Nitro code, or something similar. However, this operation must be deterministic, which probably requires updates to the existing code, for example to use the timestamps on transactions rather than reading the current clock.
+
+This phase may optionally (but identically for all members) include a nonce reordering cache, which remembers transactions that would generate nonce-too-large errors, in the hope that the missing nonce will arrive soon, allowing the erroring transaction to be re-sequenced successfully. (This corrects for out-of-order arrival of transactions.) The cache operates as follows:
+
+* Any transaction that cannot execute successfully because of a nonce-too-large error is added to the cache.
+* The cache holds up to 64 entries. If 64 entries are present and one needs to be added, the entry that was inserted earliest is discarded.
+* A transaction with timestamp `t` is discarded from the cache the first time a transaction timestamped `t+30 seconds` or greater is ready to execute.
+* If a transaction with sender S and nonce N is executed successfully, the cache is checked for a transaction with sender S and nonce N+1. If such a transaction is in the cache, it is removed from the cache and executed immediately, next in the transaction sequence, as if it had arrived immediately after the (S, N) transaction. (Its timestamp is adjusted accordingly, to equal the timestamp of the (S, N) transaction.)
+  * Note that this step may execute multiple times. For example, perhaps transactions from S with nonces 6, 7, and 8 are in the cache. If a transaction from S with nonce 5 executes, then all three transactions (6, 7, and 8) will be executed, in order, after 5; and all three will be removed from the cache.
 
 All honest members will see the same sequence of transactions in their local input queue, and this phase is deterministic, so honest members can do this phase independently and asynchronously, and they are guaranteed to produce the same sequence of blocks.
 
@@ -221,4 +229,4 @@ Honest members sign the hashes of the blocks they produce, and multicast their s
 
 <u>State and recovery for the block building engine</u>
 
-[TO DO]
+[TO DO. The main issue here is how to get the nonce re-ordering cache into sync.]
