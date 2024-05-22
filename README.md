@@ -103,9 +103,10 @@ When the consensus sub-protocol commits a result, all honest members use this co
   - the consensus timestamp of the latest successful round, and
   - the median of the timestamps of the candidate lists output by the consensus protocol
 - A consensus priority epoch number, which is computed from the consensus timestamp
-- A consensus priority inbox index, which is the maximum of:
-  - the consensus priority inbox index of the latest successful round, and
-  - the median of the priority inbox indexes of the candidate lists output by the consensus protocol
+- A consensus delayed inbox index, which is the maximum of:
+  - the consensus delayed inbox index of the latest successful round, and
+  - the median of the delayed inbox indexes of the candidate lists output by the consensus protocol
+- A (possibly empty) sequence of delayed inbox indices, consisting of the interval `(prev, current]` where `prev` is the consensus delayed inbox index of the latest successful round, and `current` is the consensus delayed inbox index of this round.
 - Among all priority bundle transactions seen in the consensus output that are tagged with the current consensus epoch number, first discard any that are not from the current consensus epoch and any that are not properly signed by the priority controller for the current epoch. Then include those that are designated as included by this procedure:
   - Let K be the largest sequence number of any bundle from the current consensus epoch number that has been included by a previous successful round’s invocation of this procedure, or -1 if there is no such bundle
   - Loop:
@@ -145,7 +146,7 @@ Such a member should record the results of consensus rounds. To get its state in
 
 * observe at least one successful round, so it can synchronize its view of the last successful round number
 * observe at least 8 rounds, so it can synchronize its view of the list of hashes from previous rounds,
-* if the first successful round it observes is round R, observe until it has seen latest-inclusion-list information from at least F+1 members, that specify round number at least R-1 in each case (but can differ across the F+1 members), which together with the observed rounds, is sufficient to synchronize the consensus timestamp and consensus inbox index for the latest successful round
+* if the first successful round it observes is round R, observe until it has seen latest-inclusion-list information from at least F+1 members, that specify round number at least R-1 in each case (but can differ across the F+1 members), which together with the observed rounds, is sufficient to synchronize the consensus timestamp and consensus delayed inbox index for the latest successful round.
 
 After doing these things, the member will be in sync and can start participating actively in future rounds of the protocol, including computing the consensus inclusion list and passing on new information to later rounds of the protocol.
 
@@ -197,21 +198,21 @@ After doing these things, the member will be in sync and can start participating
   The inclusion lists from multiple rounds can be processed concurrently, however the results must be emitted from the ordering phase in round order.
 
   An honest member sorts the transactions and bundles in the inclusion list as follows:
-  
+
   - order all priority transactions or bundles ahead of all non-priority transactions
   - among the priority transactions or bundles, order according to the sequence number given by the priority controller, then break up each bundle into its constituent transactions (by SSZ-decoding the payload as a List[List, 1048576], 1024]), maintaining the order from the bundle
   - among the non-priority transactions, order according to Hash(seed || sender address), breaking remaining ties by nonce (increasing), breaking remaining ties by Hash(contents)
   - among the delayed-inbox transactions, order by arrival order in the L1 inbox
 
   At this point, the ordering phase waits until the ordering phases of all previous rounds have completed, and then:
-  
+
   - Pushes the transactions in order, and timestamped with the consensus timestamp from their inclusion list, into the input queue of the block building engine.
-  - If the delayed inbox index of this round is P and the delayed inbox index of the previous round was Q, then push the delayed inbox transactions in the interval (Q, P], in increasing order by index, into the input queue of the block building engine. (Note that the interval might be empty.)
+  - Push the indices in the consensus delayed inbox index sequence,  in increasing order, into the input queue of the block building engine. (Note that the interval might be empty.)
 
   This completes the ordering phase for the round.
 
   <u>State and recovery for the ordering phase</u>
-  
+
   Each round of the ordering phase is self-contained, and there is no state that needs to be remembered from one round to the next. So a member can execute the ordering phase for any round for which it knows the correct result of the decryption phase.
 
 **Block building engine**
