@@ -61,6 +61,26 @@ A priority bundle is submitted by wrapping the bundle into a transaction sent to
 
 Transactions submitted to addresses other than *PriorityAddr* are called *non-priority* transactions and have the normal transaction semantics.
 
+**Configuration and key management**
+
+The protocol's configuration is managed and stored by a smart contract on the parent chain. The configuration consists of:
+
+* the number of committee members, N
+* the (assumed) maximum number of malicious members, F, which must satisfy 3F < N,
+* a public signature verification key for each committee member, in a signature scheme such as BLS which supports signature aggregation,
+* all public key and configuration information for the threshold encryption scheme,
+* an additional address (in addition to the chain owner) that can exercise the owner's privileges in this configuration contract; this can be set to address zero if not needed
+
+The chain's owner, or the specified additional address, is allowed to:
+
+* change the additional address only, with immediate effect, or
+
+* schedule a change to the entire configuration, which must be scheduled for a future timestamp.
+
+The smart contract will allow anyone to read the full configuration (or parts of it, for convenience), and to see any scheduled configuration change (both the scheduled timestamp and the full contents of the change).
+
+Information about how to connect to committee members must be available to everyone out-of-band, e.g., published as a json string at a well-known URL.
+
 **Overview of the sequencing protocol**
 
 The protocol operates in rounds, which are not the same as priority epochs. There is no fixed ratio or synchronization between rounds and priority epochs.
