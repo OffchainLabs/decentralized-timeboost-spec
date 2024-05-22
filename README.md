@@ -158,7 +158,7 @@ After doing these things, the member will be in sync and can start participating
 
 - A transaction received by *F+1* honest members will eventually be included in the inclusion list produced by some round. (Such a transaction will eventually be in one of the candidate lists produced by a round of the consensus protocol, and thereafter all honest members will have received the transaction.)
 
-- If priority bundle B (and also all priority bundles from the same epoch that have lower sequence numbers) is received by *F+1* honest members by time *tb*, and non-priority transaction T is first received by an honest member at time *tt*, and *tb* < *tt*+250 milliseconds, then B will be included in the same round’s inclusion list as T, or an earlier round’s inclusion list than T (or T will never be included).
+- If priority bundle B (and also all priority bundles from the same epoch that have lower sequence numbers) is received by *F+1* honest members by time *tb*, and non-priority transaction T is first received by an honest member at time *tt*, and *tb* < *tt*+250 milliseconds, and if B is in the inclusion list of round R, then T will not be in the inclusion list of any round earlier than R.
 
 - If two priority bundles from the same epoch have sequence numbers *i* and *j>i*, and *j* is included in a consensus inclusion list, then either *i* is included in an earlier consensus inclusion list, or *i* is included in the same consensus inclusion list in an earlier position.
 
