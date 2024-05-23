@@ -37,7 +37,7 @@ The details of the consensus sub-protocol are not specified here.
 
 **Background: threshold decryption**
 
-The protocol relies on a threshold encryption scheme that is not specified here. Transactions and bundles can be submitted in encrypted form, and these will be decrypted jointly by the members after their position in the sequencer’s output can no longer be manipulated.
+The protocol relies on a CCA-secure threshold encryption scheme that is not specified here. Transactions and bundles can be submitted in encrypted form, and these will be decrypted jointly by the members after their position in the sequencer’s output can no longer be manipulated.
 
 Each member of the sequencer committee holds a key share, and *F+1* decryption shares are needed to decrypt an encrypted item. 
 
@@ -61,6 +61,26 @@ A priority bundle is submitted by wrapping the bundle into a transaction sent to
 
 Transactions submitted to addresses other than *PriorityAddr* are called *non-priority* transactions and have the normal transaction semantics.
 
+**Configuration and key management**
+
+The protocol's configuration is managed and stored by a smart contract on the parent chain. The configuration consists of:
+
+* the number of committee members, N
+* the (assumed) maximum number of malicious members, F, which must satisfy 3F < N,
+* a public signature verification key for each committee member, in a signature scheme such as BLS which supports signature aggregation,
+* all public key and configuration information for the threshold encryption scheme,
+* an additional address (in addition to the chain owner) that can exercise the owner's privileges in this configuration contract; this can be set to address zero if not needed
+
+The chain's owner, or the specified additional address, is allowed to:
+
+* change the additional address only, with immediate effect, or
+
+* schedule a change to the entire configuration, which must be scheduled for a future timestamp.
+
+The smart contract will allow anyone to read the full configuration (or parts of it, for convenience), and to see any scheduled configuration change (both the scheduled timestamp and the full contents of the change).
+
+Information about how to connect to committee members must be available to everyone out-of-band, e.g., published as a json string at a well-known URL.
+
 **Overview of the sequencing protocol**
 
 The protocol operates in rounds, which are not the same as priority epochs. There is no fixed ratio or synchronization between rounds and priority epochs.
@@ -77,7 +97,7 @@ The inclusion phase operates on its own cadence, starting the next consensus rou
 
 **Inclusion phase**
 
-The inclusion phase uses the consensus sub-protocol, making a best effort to start the rounds of the consensus sub-protocol at 250 millisecond intervals, and never at less than a 250 millisecond interval. 
+The inclusion phase uses the consensus sub-protocol, making a best effort to start the rounds of the consensus sub-protocol at 250 millisecond intervals. 
 
 In each round of the consensus sub-protocol, each committee member submits a candidate list of transactions. The consensus round’s result is a list of *N-F* of the candidate lists submitted for that round (or no result, if the consensus round fails).
 
@@ -103,16 +123,17 @@ When the consensus sub-protocol commits a result, all honest members use this co
   - the consensus timestamp of the latest successful round, and
   - the median of the timestamps of the candidate lists output by the consensus protocol
 - A consensus priority epoch number, which is computed from the consensus timestamp
-- A consensus priority inbox index, which is the maximum of:
-  - the consensus priority inbox index of the latest successful round, and
-  - the median of the priority inbox indexes of the candidate lists output by the consensus protocol
+- A consensus delayed inbox index, which is the maximum of:
+  - the consensus delayed inbox index of the latest successful round, and
+  - the median of the delayed inbox indexes of the candidate lists output by the consensus protocol
+- A (possibly empty) sequence of delayed inbox indices, consisting of the interval `(prev, current]` where `prev` is the consensus delayed inbox index of the latest successful round, and `current` is the consensus delayed inbox index of this round.
 - Among all priority bundle transactions seen in the consensus output that are tagged with the current consensus epoch number, first discard any that are not from the current consensus epoch and any that are not properly signed by the priority controller for the current epoch. Then include those that are designated as included by this procedure:
   - Let K be the largest sequence number of any bundle from the current consensus epoch number that has been included by a previous successful round’s invocation of this procedure, or -1 if there is no such bundle
   - Loop:
     - Let S be the set of bundles from the current epoch with sequence number K+1
     - If S is empty, exit
     - Otherwise include the contents (calldata) of the member of S with smallest hash, increment K, and continue
-- All non-priority transactions that appeared in at least *F+1* of the candidate lists output by the consensus round, and did not appear in at least *F+1* of the candidate lists output by the previous successful round
+- All non-priority transactions that appeared in at least *F+1* of the candidate lists output by the consensus round, and for each of the previous 8 rounds, did not appear in at least *F+1* of the candidate lists output by that previous round
 
 If a consensus round fails, it produces no inclusion list, and the later phases of the protocol are not executed.
 
@@ -133,6 +154,7 @@ Members must keep the following state between rounds:
 - the consensus timestamp of that round; 
 - the consensus delayed inbox index of that round; 
 - the next expected priority bundle sequence number at the end of that round (i.e. the value of K+1 that caused the “S is empty” condition). 
+- hashes of all non-priority transactions that, in any of the previous 8 rounds, were seen in at least F+1 candidate lists produced by the consensus protocol for that round
 
 A member who knows this information can safely compute the consensus inclusion list of the next round, and can safely update its state for that next round. 
 
@@ -140,7 +162,13 @@ Members include their latest state information in the input, to help crashed/res
 
 If a member is recovering from a crash, or is newly joining the committee, it will not initially know the state, so it must initially participate only passively in the protocol: not submitting an input; casting votes in the core consensus protocol; not producing a local version of the consensus inclusion list (because it cannot be guaranteed correct); and not participating in later phases of the protocol.
 
-Such a member should record the results of consensus rounds. If the first round whose result it sees is R, then it should wait until it has enough information to deduce the state after round R-1 or any later round; then it can use the recorded round results to compute the current state. After doing this, the member will be in sync and can start participating actively in future rounds of the protocol, including computing the consensus inclusion list and passing on new information to later rounds of the protocol.
+Such a member should record the results of consensus rounds. To get its state into synchronization with other honest nodes, it must do the following:
+
+* observe at least one successful round, so it can synchronize its view of the last successful round number
+* observe at least 8 rounds, so it can synchronize its view of the list of hashes from previous rounds,
+* if the first successful round it observes is round R, observe until it has seen latest-inclusion-list information from at least F+1 members, that specify round number at least R-1 in each case (but can differ across the F+1 members), which together with the observed rounds, is sufficient to synchronize the consensus timestamp and consensus delayed inbox index for the latest successful round.
+
+After doing these things, the member will be in sync and can start participating actively in future rounds of the protocol, including computing the consensus inclusion list and passing on new information to later rounds of the protocol.
 
 **Guaranteed properties of the inclusion phase:**
 
@@ -150,7 +178,7 @@ Such a member should record the results of consensus rounds. If the first round 
 
 - A transaction received by *F+1* honest members will eventually be included in the inclusion list produced by some round. (Such a transaction will eventually be in one of the candidate lists produced by a round of the consensus protocol, and thereafter all honest members will have received the transaction.)
 
-- If priority bundle B (and also all priority bundles from the same epoch that have lower sequence numbers) is received by *F+1* honest members by time *tb*, and non-priority transaction T is first received by an honest member at time *tt*, and *tb* < *tt*+250 milliseconds, then B will be included in the same round’s inclusion list as T, or an earlier round’s inclusion list than T (or T will never be included).
+- If priority bundle B (and also all priority bundles from the same epoch that have lower sequence numbers) is received by *F+1* honest members by time *tb*, and non-priority transaction T is first received by an honest member at time *tt*, and *tb* < *tt*+250 milliseconds, and if B is in the inclusion list of round R, then T will not be in the inclusion list of any round earlier than R.
 
 - If two priority bundles from the same epoch have sequence numbers *i* and *j>i*, and *j* is included in a consensus inclusion list, then either *i* is included in an earlier consensus inclusion list, or *i* is included in the same consensus inclusion list in an earlier position.
 
@@ -173,7 +201,9 @@ Such a member should record the results of consensus rounds. If the first round 
 
   If any of the transactions or bundles in the inclusion list are encrypted, the committee member multicasts its decryption shares for the encrypted items. It then awaits the arrival of decryption shares from other committee members. As soon as it has received *F+1* decryption shares for an encrypted item (including its own share), it can use those shares to decrypt the item.
 
-  As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it passes the inclusion list, tagged with the round number, to the next, ordering phase. 
+  (Note that decryption of a non-priority transaction could lead to duplicate copies of the same transaction, because the result of decryption could be identical to a transaction that is already present. This cannot happen for priority bundles, nor for delayed inbox messages, because they have sequence numbers that have already been de-duplicated.)
+
+  As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it first de-duplicates the set of non-priority transactions by removing all but one instance of any transaction that is duplicated in the set, and then the member passes the de-duplicated inclusion list, tagged with the round number, to the next, ordering phase. 
 
   <u>State and recovery in the decryption phase</u>
 
@@ -197,7 +227,7 @@ Such a member should record the results of consensus rounds. If the first round 
   At this point, the ordering phase waits until the ordering phases of all previous rounds have completed, and then:
 
   - Pushes the transactions in order, and timestamped with the consensus timestamp from their inclusion list, into the input queue of the block building engine.
-  - If the delayed inbox index of this round is P and the delayed inbox index of the previous round was Q, then push the delayed inbox transactions in the interval (Q, P], in increasing order by index, into the input queue of the block building engine. (Note that the interval might be empty.)
+  - Push the indices in the consensus delayed inbox index sequence,  in increasing order, into the input queue of the block building engine. (Note that the interval might be empty.)
 
   This completes the ordering phase for the round.
 
@@ -211,7 +241,15 @@ Each honest committee member runs an instance of the block building engine.
 
 The job of the block building engine is to consume timestamped transactions from its input queue and use them to build blocks. This uses the same block-building logic already included in “back end” of the current Arbitrum sequencer, which executes the transactions, filters out transactions that are invalid or unfunded, and packs the transactions into blocks. 
 
-This would use the ProduceBlockAdvanced function in the Nitro code, or something similar. However, the existing logic probably needs to be updated to be fully deterministic, for example to use the timestamps on transactions rather than reading the current clock.
+This would use the ProduceBlockAdvanced function in the Nitro code, or something similar. However, this operation must be deterministic, which probably requires updates to the existing code, for example to use the timestamps on transactions rather than reading the current clock.
+
+This phase may optionally (but identically for all members) include a nonce reordering cache, which remembers transactions that would generate nonce-too-large errors, in the hope that the missing nonce will arrive soon, allowing the erroring transaction to be re-sequenced successfully. (This corrects for out-of-order arrival of transactions.) The cache operates as follows:
+
+* Any transaction that cannot execute successfully because of a nonce-too-large error is added to the cache.
+* The cache holds up to 64 entries. If 64 entries are present and one needs to be added, the entry that was inserted earliest is discarded.
+* A transaction with timestamp `t` is discarded from the cache the first time a transaction timestamped `t+30 seconds` or greater is ready to execute.
+* If a transaction with sender S and nonce N is executed successfully, the cache is checked for a transaction with sender S and nonce N+1. If such a transaction is in the cache, it is removed from the cache and executed immediately, next in the transaction sequence, as if it had arrived immediately after the (S, N) transaction. (Its timestamp is adjusted accordingly, to equal the timestamp of the (S, N) transaction.)
+  * Note that this step may execute multiple times. For example, perhaps transactions from S with nonces 6, 7, and 8 are in the cache. If a transaction from S with nonce 5 executes, then all three transactions (6, 7, and 8) will be executed, in order, after 5; and all three will be removed from the cache.
 
 All honest members will see the same sequence of transactions in their local input queue, and this phase is deterministic, so honest members can do this phase independently and asynchronously, and they are guaranteed to produce the same sequence of blocks.
 
@@ -219,4 +257,4 @@ Honest members sign the hashes of the blocks they produce, and multicast their s
 
 <u>State and recovery for the block building engine</u>
 
-[TO DO]
+[TO DO. The main issue here is how to get the nonce re-ordering cache into sync.]
