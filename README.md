@@ -136,7 +136,7 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
 
 - there is some honest member $m$ such that $T_R \le$  $m.\mathrm{clock}$
 
-- ###### for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
+- for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
 
 - $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
 
