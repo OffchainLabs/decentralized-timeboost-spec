@@ -153,7 +153,7 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
 
 - Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ members before $\tau+250\ \mathrm{milliseconds}$.
 
-- If $i \ge 0$ and for all $s \le i$, a properly signed priority bundle $b$ with epoch number $e$ and sequence number $s$ is received by at least $F+1$ honest parties before (real) time $t$, then if there is a round $R$ completes with timestamp $T_R$ that is within the epoch $e$, and if $T_R \ge t+d$, then $b$ is included in a block.
+- If $i \ge 0$ and if for all $s \le i$, a properly signed priority bundle $b$ with epoch number $e$ and sequence number $s$ is received by at least $F+1$ honest parties before (real) time $t$, and if there is a round $R$ that result includes timestamp $T_R$ and that is within the epoch $e$, and if $T_R \ge t+d$, then $b$ is included in some round's result.
 
 **Inclusion phase: reference implementation strategy**
 
