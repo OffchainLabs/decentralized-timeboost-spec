@@ -113,12 +113,20 @@ Assumptions:
 
 The result of a round is either FAILURE or a block that contains:
 
-- a round number $R > 0$
+- a round number $R$
 - a predecessor round number $P$
 - a consensus timestamp $T_R$
 - a pair of delayed inbox finality numbers, $I_{R,\mathrm{first}}$ and $I_{R,\mathrm{next}}$
-- an unordered set $N_R$ of (possibly encrypted) non-priority transactions
-- an ordered set $B_R$ of (possibly encrypted) priority bundles
+- an unordered set $N_R$ of non-priority transactions. A subset of these may be encrypted. If a non-priority transaction is encrypted, then the entire transaction is encrypted as a single ciphertext.
+- an ordered set $B_R$ of priority bundles. A subset of these may be encrypted. If a priority bundle is encrypted, then the payload (i.e. the contents of all transacitons contained in the bundle) is encrypted as a single ciphertext, with the other fields of the bundle (including epoch number, sequence number, and signature) remaining in plaintext.
+
+The result of round number zero is predetermined and is considered to have been committed by all parties. It has:
+- $R = 0$
+- $P = 0$
+- $T_R = 0$
+- $I_{0,\mathrm{first}} = I_{0,\mathrm{next}} = I_\mathrm{init}$, where $I_\mathrm{init} is set administratively
+- $N_R = \emptyset$
+- $B_R = \emptyset$
 
 Standard consensus properties:
 
@@ -127,32 +135,20 @@ Standard consensus properties:
 - If some honest member commits a result for round $R$, then all honest members will eventually commit a result for round $R$.
 
 If a non-FAILURE result has been committed by an honest member for a round $R > 0$, then at the time of commitment and all later times, the result satisfies these properties:
-
 - $P < R$
-
 - for all $i$ such that $P < i < R$: the member committed FAILURE as the result of round $i$
-
 - $T_R \ge T_P$
-
 - there is some honest member $m$ such that $T_R \le$  $m.\mathrm{clock}$
-
 - for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
-
 - $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
-
 - $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
-
 - the bundles in $B_R$ are sorted in increasing order of sequence number
-
 - If a bundle $b \in B_R$ and $b$ has epoch $e_b$ and sequence number $s_b$, then:
   - $e_b = \mathrm{epoch}(T_R)$
   - for every bundle $b' \in B_P$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
-  - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$
-  
-- If a non-priority transaction has arrived at all honest members, it will eventually be in the result of some round.
-
+  - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
+- If a non-priority transaction has arrived at all honest members, it will eventually be in $N_R$ for some round $R$.
 - Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ members before $\tau+250\ \mathrm{milliseconds}$.
-
 - If $i \ge 0$ and if for all $s \le i$, a properly signed priority bundle $b$ with epoch number $e$ and sequence number $s$ is received by at least $F+1$ honest parties before (real) time $t$, and if there is a round $R$ that result includes timestamp $T_R$ and that is within the epoch $e$, and if $T_R \ge t+d$, then $b$ is included in some round's result.
 
 **Inclusion phase: reference implementation strategy**
