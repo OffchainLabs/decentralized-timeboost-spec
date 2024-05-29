@@ -105,9 +105,7 @@ The inclusion phase is specified as a set of properties that the inclusion sub-p
 
 Assumptions:
 
-- Each member has a local clock, which is non-decreasing. These satisfy:
-  - liveness: if one honest member’s clock is $t$, then all honest members’ clocks will eventually be $\ge t$.
-  - bounded skew: If $m$ and $m'$ are honest members, then $|m.\mathrm{clock}-m'.\mathrm{clock}| \le d$ for some known bound $d$
+- Each member has a local clock, which is non-decreasing. If the true universal time is $t$ and an honest member $m$ has local clock $t_m$, then $|t_m-t| \le d$.  This implies that the clocks of two honest members cannot differ by more than $2d$.
 - The L1 delayed inbox (a contract on the L1 chain) has a finality number, which is non-decreasing.
 - Each member has a view of the delayed inbox finality number, which satisfies:
   - safety: the member’s view is $\le$ the true number
@@ -134,7 +132,7 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
 - for all $i$ such that $P < i < R$: the member committed FAILURE as the result of round $i$
 - $T_R \ge T_P$
 - there is some honest member $m$ such that $T_R \le$  $m.\mathrm{clock}$
-- for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
+- for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
 - $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
 - $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
 - the bundles in $B_R$ are sorted in increasing order of sequence number
