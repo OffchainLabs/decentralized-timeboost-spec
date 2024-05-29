@@ -109,7 +109,7 @@ Assumptions:
 - The L1 delayed inbox (a contract on the L1 chain) has a finality number, which is non-decreasing.
 - Each member has a view of the delayed inbox finality number, which satisfies:
   - safety: the member’s view is $\le$ the true number
-  - liveness: if the true number is $i$, then the member’s view will eventually be $\le i$
+  - liveness: if the true number is $i$, then the member’s view will eventually be $\ge i$
 
 The result of a round is either FAILURE or a block that contains:
 
