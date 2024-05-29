@@ -129,20 +129,31 @@ Standard consensus properties:
 If a non-FAILURE result has been committed by an honest member for a round $R > 0$, then at the time of commitment and all later times, the result satisfies these properties:
 
 - $P < R$
+
 - for all $i$ such that $P < i < R$: the member committed FAILURE as the result of round $i$
+
 - $T_R \ge T_P$
+
 - there is some honest member $m$ such that $T_R \le$  $m.\mathrm{clock}$
-- for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
+
+- ###### for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
+
 - $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
+
 - $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
+
 - the bundles in $B_R$ are sorted in increasing order of sequence number
+
 - If a bundle $b \in B_R$ and $b$ has epoch $e_b$ and sequence number $s_b$, then:
   - $e_b = \mathrm{epoch}(T_R)$
   - for every bundle $b' \in B_P$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
   - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$
+  
 - If a non-priority transaction has arrived at all honest members, it will eventually be in the result of some round.
+
 - Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ members before $\tau+250\ \mathrm{milliseconds}$.
-- [open question: Can we write an inclusion guarantee for priority bundles? This is difficult because of the constraints on when/how they can be included. As an example, a bundle is tied to a priority epoch, so it can only be included within a fixed range of consensus timestamps corresponding to that epoch; but if the network is asynchronous then we can’t even guarantee that any round will start or finish during that epoch.]
+
+- If $i \ge 0$ and for all $s \le i$, a properly signed priority bundle $b$ with epoch number $e$ and sequence number $s$ is received by at least $F+1$ honest parties before (real) time $t$, then if there is a round $R$ completes with timestamp $T_R$ that is within the epoch $e$, and if $T_R \ge t+d$, then $b$ is included in a block.
 
 **Inclusion phase: reference implementation strategy**
 
