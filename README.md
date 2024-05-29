@@ -157,6 +157,8 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
 
 **Inclusion phase: reference implementation strategy**
 
+This section describes a reference implementation strategy for the inclusion phase. This strategy satisfies all of the requirements, but implementations are free to use a different strategy if it also satisfies the requirements.
+
 In each round of the consensus sub-protocol, each committee member submits a candidate list of transactions. The consensus round’s result is a list of *N-F* of the candidate lists submitted for that round (or no result, if the consensus round fails).
 
 When a member constructs its *candidate list* as its input to a consensus round, it includes all of the following in its candidate list:
