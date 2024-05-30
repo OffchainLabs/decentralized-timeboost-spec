@@ -124,7 +124,7 @@ The result of round number zero is predetermined and is considered to have been 
 - $R = 0$
 - $P = 0$
 - $T_R = 0$
-- $I_{0,\mathrm{first}} = I_{0,\mathrm{next}} = I_\mathrm{init}$, where $I_\mathrm{init} is set administratively
+- $I_{0,\mathrm{first}} = I_{0,\mathrm{next}} = I_\mathrm{init}$, where $I_\mathrm{init}$ is set administratively
 - $N_R = \emptyset$
 - $B_R = \emptyset$
 
