@@ -1,18 +1,18 @@
-# Decentralized express-lane time boost sequencer
+# Decentralized time boost sequencer
 
 **Goals:**
 
 - good latency for retail transactions and for arbitrage
 - transaction submitters are able to protect their transactions from front-running and sandwiching, assuming the committee is threshold-honest
-- provide a decentralized version of the express-lane lottery approach to time boost
-  - an express-lane controller, who is chosen by an external auction (or similar) process, can get transactions included faster than anyone else, so it can win any arbitrage races
+- provide a decentralized version of the priority controller auction approach to time boost
+  - a priority controller, who is chosen by an external auction (or similar) process, can get transactions included faster than anyone else, so it can win any arbitrage races
 
 **Assumptions:**
 
 - sequencer committee of *N* nodes, of which at most *F < N/3* are byzantine malicious
   - members are chosen so that the community trusts at least N-F members are honest
 - each committee member has a clock with one-second granularity, and the clocks of honest nodes are roughly in sync
-- time is divided into epochs of 60 seconds each, with epoch *i* starting at timestamp *60i* and lasting until timestamp *60i+59*
+- time is divided into epochs of 60 seconds each, with epoch *i* starting at timestamp *60i* and lasting until timestamp *60i+59*, The function $\mathrm{epoch}(t)$ returns the epoch number to which timestamp $t$ belongs.
 - before each epoch, an external mechanism designates one party (by its public key) as the express-lane controller for that epoch
 
 **Submitting transactions**
@@ -117,14 +117,18 @@ The result of a round is either FAILURE or a block that contains:
 - a predecessor round number $P$
 - a consensus timestamp $T_R$
 - a pair of delayed inbox finality numbers, $I_{R,\mathrm{first}}$ and $I_{R,\mathrm{next}}$
+	- these represent a consecutive sequence of delayed inbox messages, with numbers $[I_{R,\mathrm{first}}, I_{R,\mathrm{next}})
+	
 - an unordered set $N_R$ of non-priority transactions. A subset of these may be encrypted. If a non-priority transaction is encrypted, then the entire transaction is encrypted as a single ciphertext.
-- an ordered set $B_R$ of priority bundles. A subset of these may be encrypted. If a priority bundle is encrypted, then the payload (i.e. the contents of all transacitons contained in the bundle) is encrypted as a single ciphertext, with the other fields of the bundle (including epoch number, sequence number, and signature) remaining in plaintext.
+- an ordered set $B_R$ of priority bundles. A subset of these may be encrypted. If a priority bundle is encrypted, then the payload (i.e. the contents of all transactions contained in the bundle) is encrypted as a single ciphertext, with the other fields of the bundle (including epoch number, sequence number, and signature) remaining in plaintext.
 
 The result of round number zero is predetermined and is considered to have been committed by all parties. It has:
 - $R = 0$
 - $P = 0$
 - $T_R = 0$
 - $I_{0,\mathrm{first}} = I_{0,\mathrm{next}} = I_\mathrm{init}$, where $I_\mathrm{init}$ is set administratively
+  - $i_\mathrm{init}$ is the first delayed inbox message that needs to be sequenced by this protocol instance
+
 - $N_R = \emptyset$
 - $B_R = \emptyset$
 
@@ -139,19 +143,24 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
 - for all $i$ such that $P < i < R$: the member committed FAILURE as the result of round $i$
 - $T_R \ge T_P$
 - there is some honest member $m$ such that $T_R \le$  $m.\mathrm{clock}$
-- for all $n \in N_R$, there is some honest member $m$ such that $n$ arrived at $m$ before time $T_R+2d-250\ \mathrm{milliseconds}$, according to $m$’s local clock
 - $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
+  - This ensures that there are no gaps between the $I$ sequences from consecutive rounds
+
 - $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
 - the bundles in $B_R$ are sorted in increasing order of sequence number
 - If a bundle $b \in B_R$ and $b$ has epoch $e_b$ and sequence number $s_b$, then:
   - $e_b = \mathrm{epoch}(T_R)$
-  - for every bundle $b' \in B_P$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
+  - for every round $R' < R$, and every bundle $b' \in B_{R'}$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
+    - Across all rounds, bundles are in lexicographic order by (epoch number, sequence number)
   - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
-- Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ members before $\tau+250\ \mathrm{milliseconds}$.
+    - There are gaps in the sequence numbers included within an epoch.
+- Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before $\tau+250\ \mathrm{milliseconds}$.
 
 Inclusion guarantees:
 - If a non-priority transaction has arrived at all honest members, it will eventually be in $N_{R'}$ for some round $R'$.
-- For any properly signed priority bundle $b$ with epoch number $e$ and sequence number $s$, if for all $0 \le i \le s$, a properly signed priority bundle with epoch number $e$ and sequence number $i$ is received by at least $F+1$ honest parties before (real) time $t$, and if there is a round $R'$ that result includes timestamp $T_{R'}$ and that is within the epoch $e$, and if $T_{R'} \ge t+d$, then $b \in B_{R''}$ for some round $R''$.
+- If an honest party commits block $R$, let $e = \mathrm{epoch}(T_R)$.  Then for any sequence number $s$, if either $s=0$ or a bundle with epoch $e$ and sequence number $s-1$ is included in $R$ or an earlier round result committed by the same member, and if at least $F+1$ honest members received a bundle with epoch $e$ and sequence number $s$ before $T_R-d$ (according to each such member's local clock), then some bundle with epoch $e$ and sequence number $s$ is included in $B_R$.
+  - Note that different members might have received different bundles with the same (epoch, sequence number) values. In that case the guarantee ensures that one of them will be included.
+
 
 **Inclusion phase: reference implementation strategy**
 
