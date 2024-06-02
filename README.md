@@ -57,7 +57,7 @@ A priority bundle is submitted by wrapping the bundle into a transaction sent to
   - Sequence numbers restart from zero in each new epoch, and should increment consecutively within each epoch. The protocol will ensure that bundles within an epoch are included in the chain in sequence-number order.
 - If the epoch number does not equal the current epoch number or the current epoch number plus 1, ignore the transaction.
 - Otherwise, if the transaction has not been signed by the priority controller address for its epoch number, ignore the transaction.
-- Otherwise, construct a priority bundle with the translation’s calldata as the contents (which might be encrypted), and tag it with the extracted epoch number and sequence number. 
+- Otherwise, unpack the transaction to construct a priority bundle, with the transaction’s calldata becoming the bundle's contents (which might be encrypted), and the extracted epoch number and sequence number becoming the epoch number and sequence number of the bundle. 
 
 Transactions submitted to addresses other than *PriorityAddr* are called *non-priority* transactions and have the normal transaction semantics.
 
@@ -105,7 +105,7 @@ The inclusion phase is specified as a set of properties that the inclusion sub-p
 
 Assumptions:
 
-- Each member has a local clock, which is non-decreasing. If the true universal time is $t$ and an honest member $m$ has local clock $t_m$, then $|t_m-t| \le d$.  This implies that the clocks of two honest members cannot differ by more than $2d$.
+- Each member has a local clock, which is non-decreasing. If the universal time (i.e., the true, correct time) is $t$ and an honest member $m$ has local clock $t_m$, then $|t_m-t| \le d$.  This implies that the clocks of two honest members cannot differ by more than $2d$.
 - The L1 delayed inbox (a contract on the L1 chain) has a finality number, which is non-decreasing.
 - Each member has a view of the delayed inbox finality number, which satisfies:
   - safety: the member’s view is $\le$ the true number
@@ -154,7 +154,7 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
     - Across all rounds, bundles are in lexicographic order by (epoch number, sequence number)
   - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
     - There are gaps in the sequence numbers included within an epoch.
-- Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before $\tau+250\ \mathrm{milliseconds}$.
+- Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before (universal time) $\tau+250\ \mathrm{milliseconds}$.
 
 Inclusion guarantees:
 - If a non-priority transaction has arrived at all honest members, it will eventually be in $N_{R'}$ for some round $R'$.
