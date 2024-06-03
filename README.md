@@ -1,18 +1,18 @@
-# Decentralized express-lane time boost sequencer
+# Decentralized time boost sequencer
 
 **Goals:**
 
 - good latency for retail transactions and for arbitrage
 - transaction submitters are able to protect their transactions from front-running and sandwiching, assuming the committee is threshold-honest
-- provide a decentralized version of the express-lane lottery approach to time boost
-  - an express-lane controller, who is chosen by an external auction (or similar) process, can get transactions included faster than anyone else, so it can win any arbitrage races
+- provide a decentralized version of the priority controller auction approach to time boost
+  - a priority controller, who is chosen by an external auction (or similar) process, can get transactions included faster than anyone else, so it can win any arbitrage races
 
 **Assumptions:**
 
-- sequencer committee of *N* nodes, of which at most *F < N/3* are byzantine malicious. The quorum size *Q = ceil((N+F+1)/2)*
+- sequencer committee of *N* nodes, of which at most *F < N/3* are byzantine malicious
   - members are chosen so that the community trusts at least N-F members are honest
 - each committee member has a clock with one-second granularity, and the clocks of honest nodes are roughly in sync
-- time is divided into epochs of 60 seconds each, with epoch *i* starting at timestamp *60i* and lasting until timestamp *60i+59*
+- time is divided into epochs of 60 seconds each, with epoch *i* starting at timestamp *60i* and lasting until timestamp *60i+59*, The function $\mathrm{epoch}(t)$ returns the epoch number to which timestamp $t$ belongs.
 - before each epoch, an external mechanism designates one party (by its public key) as the express-lane controller for that epoch
 
 **Submitting transactions**
@@ -57,74 +57,27 @@ A priority bundle is submitted by wrapping the bundle into a transaction sent to
   - Sequence numbers restart from zero in each new epoch, and should increment consecutively within each epoch. The protocol will ensure that bundles within an epoch are included in the chain in sequence-number order.
 - If the epoch number does not equal the current epoch number or the current epoch number plus 1, ignore the transaction.
 - Otherwise, if the transaction has not been signed by the priority controller address for its epoch number, ignore the transaction.
-- Otherwise, construct a priority bundle with the translation’s calldata as the contents (which might be encrypted), and tag it with the extracted epoch number and sequence number. 
+- Otherwise, unpack the transaction to construct a priority bundle, with the transaction’s calldata becoming the bundle's contents (which might be encrypted), and the extracted epoch number and sequence number becoming the epoch number and sequence number of the bundle. 
 
 Transactions submitted to addresses other than *PriorityAddr* are called *non-priority* transactions and have the normal transaction semantics.
 
 **Configuration and key management**
 
-The protocol uses two sets of keys: signing keys and threshold decryption keys. Signing keys are used to authenticate messages from members, and to sign quorum certificates. Threshold decryption keys are used for the threshold decryption functionality as described below.
+The protocol's configuration is managed and stored by a smart contract on the parent chain. The configuration consists of:
 
-The authoritative source of information about keys is the *key management contract*, a smart contract on the parent chain.  Users of the protocol, and the committee members themselves, rely on the key management contract for information about currently valid keys and any scheduled key changes.
+* the number of committee members, N
+* the (assumed) maximum number of malicious members, F, which must satisfy 3F < N,
+* a public signature verification key for each committee member, in a signature scheme such as BLS which supports signature aggregation,
+* all public key and configuration information for the threshold encryption scheme,
+* an additional address (in addition to the chain owner) that can exercise the owner's privileges in this configuration contract; this can be set to address zero if not needed
 
-Actions that change the state of the key management contract may be done only by chain governance (via calls from an address configured when the key management contract is deployed) or by the key manager address, an address which can be changed only by chain governance.
+The chain's owner, or the specified additional address, is allowed to:
 
-Implementation notes: 
+* change the additional address only, with immediate effect, or
 
-* The governance and key manager addresses can hold multi-sigs or other authorization structures, so arbitrary authorization policies can be used.
-* Information about how to connect to committee members must be available to everyone out-of-band, e.g., published as a json string at a well-known URL.
+* schedule a change to the entire configuration, which must be scheduled for a future timestamp.
 
-<u>Managing signing keys</u>
-
-The protocol uses a signature scheme that supports threshold aggregation of signatures, so that Q signature shares are sufficient to produce a quorum signature.
-
-These keys and this signature scheme are used in the core consensus protocol to authenticate messages. They are also used to produce quorum certificates on the blocks produced by the protocol.
-
-The key management contract keeps track of the current keyset, along with a future keyset with a starting timestamp for when that future keyset will become active. (The future keyset and its starting timestamp may be null, if no keyset change has been scheduled.)
-
-A signature keyset consists of:
-
-* the quroum size
-* a share verification key for each member, allowing to validate that member's signature share
-* a quorum verification key, allowing to verify a quorum signature
-
-Chain governance or the key manager address can:
-
-* schedule a change to a new signature keyset, by submitting to the key management contract the new keyset along with a timestamp when it will be scheduled to take effect; this timestamp must be at least ten minutes in the future
-  * only one scheduled keyset update can be pending in the contract at a time; if a keyset update request is sent to the contract and there is already a keyset update pending on the schedule, then the new update can replace the old scheduled one, provided that the old one's start time is more than ten minutes in the future
-  * implementation note: These rules ensure that everyone has at least ten minutes of advance notice before a keyset change. So it should be sufficient for interested parties to check the key management contract for changes every five minutes.
-
-Design note: A new signature keyset takes effect at a scheduled timestamp. This has two consequences:
-
-* The quorum certificate for a block will always be correctly created, because each block has a timestamp so it will be clear which committee should be signing each block
-* If members' clocks differ, they might disagree about which committee is the correct one for a round of the core consensus protocol, because some members might have clocks before the change-over time while others have clocks after the change-over. This could cause one or more rounds of core consensus to fail, but once enough members see the change-over timestamp as having been reached, progress should continue.
-
-<u>Managing threshold decryption keys</u>
-
-The protocol uses a CCA-secure threshold decryption scheme. For this scheme, a "keyset" consists of:
-
-* a keyset ID, which is a unique 8-byte string assigned by the key management contract,
-* a starting timestamp for this keyset; the keyset will be considered invalid in protocol rounds with timestamps less than this timestamp
-* the scheduled "sunset timestamp" for this keyset; the keyset will be considered invalid in protocol rounds with timestamps greater than or equal to this sunset timestamp
-  * this can be set to "infinity" if no sunset has been scheduled yet
-* the key material needed to encrypt to the set
-
-Chain governance or the key manager address can:
-
-* create new keysets, provided that the starting timestamp of a new keyset is at least ten minutes in the future,
-* change the sunset timestamp of a keyset, provided that the previous sunset value and the new sunset value are both at least ten minutes in the future
-* delete a keyset, provided its sunset timestamp is at least ten minutes in the past
-
-At any given time, multiple keysets may be valid.  Every ciphertext for threshold decryption is prepended with the 8-byte keyset ID of the keyset used to encrypt it. 
-
-Implementation notes:
-
-* The contract enforces that any changes to keyset validity happen with at least ten minutes of advance notice, so interested parties will learn of changes soon enough if they check the contract for changes every five minutes.
-* When a client encrypts a bundle or transaction, it does not know the timestamp of the protocol round in which that item will be decrypted. If the timestamp of that round is outside the bounds of the starting and sunset timestamps for the keyset used for encryption, the transaction will be silently dropped. 
-* Given the choice among multiple keysets, clients should prefer keysets with starting timestamps at least five minutes in the past, and among those, keysets with sunset timestamps farther in the future.
-* When the key management strategy switches from an old keyset to a new one, the two keysets' validity periods should overlap by at least fifteen minutes. This ensures that a client who checks the state every five minutes will always know of a keyset that is preferred according to the previous rule.
-* The on-chain state does not include the information that committee members need to verify decryption shares, nor does it include the number of shares needed to decrypt.  This is assumed to be known to all honest members through out-of-band means.
-* Members can use an out-of-band procedure to refresh key sharing, to create new decryption shares associated with an existing key ID. If this happens, the change-over should be synchronized using an agreed upon change-over timestamp, so that the new sharing starts being used in the first round with timestamp greater than or equal to the change-over timestamp.
+The smart contract will allow anyone to read the full configuration (or parts of it, for convenience), and to see any scheduled configuration change (both the scheduled timestamp and the full contents of the change).
 
 Information about how to connect to committee members must be available to everyone out-of-band, e.g., published as a json string at a well-known URL.
 
@@ -134,7 +87,7 @@ The protocol operates in rounds, which are not the same as priority epochs. Ther
 
 Each round operates in three phases, and results in pushing a sequence of transactions into a queue which will be consumed by the block-building engine.
 
-- The *inclusion* phase produces a consensus inclusion list, which is an unordered set of transactions and priority bundles. Each transaction (or bundle) in an inclusion list may or may not be encrypted under the threshold encryption scheme.
+- The *inclusion* phase produces a consensus inclusion list, which contains a set of transactions and priority bundles, and some metadata. Each transaction (or bundle) in an inclusion list may or may not be encrypted under the threshold encryption scheme.
 - The *decryption* phase takes the consensus inclusion list produced by the inclusion phase, and threshold-decrypts any encrypted transactions or bundles in the list.
 - The *ordering* phase takes the decrypted inclusion list produced by the decryption phase, and produces an ordered sequence of timestamped transactions, which are pushed into a queue that will be consumed by the block-building engine. 
 
@@ -145,6 +98,73 @@ The inclusion phase operates on its own cadence, starting the next consensus rou
 **Inclusion phase**
 
 The inclusion phase uses the consensus sub-protocol, making a best effort to start the rounds of the consensus sub-protocol at 250 millisecond intervals. 
+
+The inclusion phase is specified as a set of properties that the inclusion sub-protocol must satisfy.  This is followed by a description of a reference implementation strategy, which satisfies those properties.  The reference is included for its explanatory value; implementations can use a different strategy as long as the required properties are satisfied.
+
+**Inclusion phase: required properties**
+
+Assumptions:
+
+- Each member has a local clock, which is non-decreasing. If the universal time (i.e., the true, correct time) is $t$ and an honest member $m$ has local clock $t_m$, then $|t_m-t| \le d$.  This implies that the clocks of two honest members cannot differ by more than $2d$.
+- The L1 delayed inbox (a contract on the L1 chain) has a finality number, which is non-decreasing.
+- Each member has a view of the delayed inbox finality number, which satisfies:
+  - safety: the member’s view is $\le$ the true number
+  - liveness: if the true number is $i$, then the member’s view will eventually be $\ge i$
+
+The result of a round is either FAILURE or a block that contains:
+
+- a round number $R$
+- a predecessor round number $P$
+- a consensus timestamp $T_R$
+- a pair of delayed inbox finality numbers, $I_{R,\mathrm{first}}$ and $I_{R,\mathrm{next}}$
+	- these represent a consecutive sequence of delayed inbox messages, with numbers $[I_{R,\mathrm{first}}, I_{R,\mathrm{next}})$
+	
+- an unordered set $N_R$ of non-priority transactions. A subset of these may be encrypted. If a non-priority transaction is encrypted, then the entire transaction is encrypted as a single ciphertext.
+- an ordered set $B_R$ of priority bundles. A subset of these may be encrypted. If a priority bundle is encrypted, then the payload (i.e. the contents of all transactions contained in the bundle) is encrypted as a single ciphertext, with the other fields of the bundle (including epoch number, sequence number, and signature) remaining in plaintext.
+
+The result of round number zero is predetermined and is considered to have been committed by all parties. It has:
+- $R = 0$
+- $P = 0$
+- $T_R = 0$
+- $I_{0,\mathrm{first}} = I_{0,\mathrm{next}} = I_\mathrm{init}$, where $I_\mathrm{init}$ is set administratively
+  - $i_\mathrm{init}$ is the first delayed inbox message that needs to be sequenced by this protocol instance
+
+- $N_R = \emptyset$
+- $B_R = \emptyset$
+
+Standard consensus properties:
+
+- If an honest member has committed a result for round $R > 0$, then it has committed a result for round $R-1$.
+- If two honest members both commit a result for round $R$, then they commit the same result.
+- If some honest member commits a result for round $R$, then all honest members will eventually commit a result for round $R$.
+
+If a non-FAILURE result has been committed by an honest member for a round $R > 0$, then at the time of commitment and all later times, the result satisfies these properties:
+- $P < R$
+- for all $i$ such that $P < i < R$: the member committed FAILURE as the result of round $i$
+- $T_R \ge T_P$
+- there is some honest member $m$ such that $T_R \le$  $m.\mathrm{clock}$
+- $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
+  - This ensures that there are no gaps between the $I$ sequences from consecutive rounds
+
+- $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
+- the bundles in $B_R$ are sorted in increasing order of sequence number
+- If a bundle $b \in B_R$ and $b$ has epoch $e_b$ and sequence number $s_b$, then:
+  - $e_b = \mathrm{epoch}(T_R)$
+  - for every round $R' < R$, and every bundle $b' \in B_{R'}$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
+    - Across all rounds, bundles are in lexicographic order by (epoch number, sequence number)
+  - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
+    - There are gaps in the sequence numbers included within an epoch.
+- Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before (universal time) $\tau+250\ \mathrm{milliseconds}$.
+
+Inclusion guarantees:
+- If a non-priority transaction has arrived at all honest members, it will eventually be in $N_{R'}$ for some round $R'$.
+- If an honest party commits block $R$, let $e = \mathrm{epoch}(T_R)$.  Then for any sequence number $s$, if either $s=0$ or a bundle with epoch $e$ and sequence number $s-1$ is included in $R$ or an earlier round result committed by the same member, and if at least $F+1$ honest members received a bundle with epoch $e$ and sequence number $s$ before $T_R-d$ (according to each such member's local clock), then some bundle with epoch $e$ and sequence number $s$ is included in $B_R$.
+  - Note that different members might have received different bundles with the same (epoch, sequence number) values. In that case the guarantee ensures that one of them will be included.
+
+
+**Inclusion phase: reference implementation strategy**
+
+This section describes a reference implementation strategy for the inclusion phase. This strategy satisfies all of the requirements, but implementations are free to use a different strategy if it also satisfies the requirements.
 
 In each round of the consensus sub-protocol, each committee member submits a candidate list of transactions. The consensus round’s result is a list of *N-F* of the candidate lists submitted for that round (or no result, if the consensus round fails).
 
@@ -217,70 +237,47 @@ Such a member should record the results of consensus rounds. To get its state in
 
 After doing these things, the member will be in sync and can start participating actively in future rounds of the protocol, including computing the consensus inclusion list and passing on new information to later rounds of the protocol.
 
-**Guaranteed properties of the inclusion phase:**
+**Decryption phase**
 
-- If *F+1* honest members receive a priority bundle before starting a round, and the round does not fail, that priority bundle will be in the inclusion list produced by the round (if not in an earlier round).
+Some or all of the transactions and bundles in the consensus inclusion list may be encrypted. The decryption phase will decrypt them. This phase consumes the results of the inclusion phase, which will be the same for all honest members, and all honest members will produce the same output for this phase.
 
-- If all honest members receive a non-priority transaction at least 250 milliseconds before a round starts, and the round does not fail, that transaction will be in the inclusion list produced by the round (if not in an earlier round).
+The decryption phases of multiple rounds can be done concurrently.
 
-- A transaction received by *F+1* honest members will eventually be included in the inclusion list produced by some round. (Such a transaction will eventually be in one of the candidate lists produced by a round of the consensus protocol, and thereafter all honest members will have received the transaction.)
+If any of the transactions or bundles in the inclusion list are encrypted, the committee member multicasts its decryption shares for the encrypted items. It then awaits the arrival of decryption shares from other committee members. As soon as it has received *F+1* decryption shares for an encrypted item (including its own share), it can use those shares to decrypt the item.
 
-- If priority bundle B (and also all priority bundles from the same epoch that have lower sequence numbers) is received by *F+1* honest members by time *tb*, and non-priority transaction T is first received by an honest member at time *tt*, and *tb* < *tt*+250 milliseconds, and if B is in the inclusion list of round R, then T will not be in the inclusion list of any round earlier than R.
+(Note that decryption of a non-priority transaction could lead to duplicate copies of the same transaction, because the result of decryption could be identical to a transaction that is already present. This cannot happen for priority bundles, nor for delayed inbox messages, because they have sequence numbers that have already been de-duplicated.)
 
-- If two priority bundles from the same epoch have sequence numbers *i* and *j>i*, and *j* is included in a consensus inclusion list, then either *i* is included in an earlier consensus inclusion list, or *i* is included in the same consensus inclusion list in an earlier position.
+As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it first de-duplicates the set of non-priority transactions by removing all but one instance of any transaction that is duplicated in the set, and then the member passes the de-duplicated inclusion list, tagged with the round number, to the next, ordering phase. 
 
-- The consensus timestamp is both:
+<u>State and recovery in the decryption phase</u>
 
-  - Less than or equal to the timestamp submitted to the current round by some honest party, and
-  - Greater than or equal to the timestamp submitted to the current round or some previous round by some honest party
+The decryption phase is stateless. No state needs to be remembered from one round to the next. So a member can participate in the decryption phase of any round, if it knows the correct inclusion list result for that round.
 
-- The consensus delayed inbox index is all of these:
+**Ordering phase**
 
-  - Less than or equal to the largest index of any delayed inbox message that has achieved finality on the parent chain, and
-  - Less than or equal to the delayed inbox index submitted to the current round by some honest party, and
-  - Greater than or equal to the delayed inbox index submitted to the current round or some previous round by some honest party 
+Each honest committee member runs a separate instance of the ordering phase. This phase is deterministic, and consumes inputs that will be the same for all honest members, so it will produce the same sequence of outputs for every honest member.
 
-  **Decryption phase**
+The ordering phase consumes the inclusion lists produced by the decryption phase, and produces an ordered sequence of timestamped transactions, which are pushed into a queue that will be consumed by the block building engine. 
 
-  Some or all of the transactions and bundles in the consensus inclusion list may be encrypted. The decryption phase will decrypt them. This phase consumes the results of the inclusion phase, which will be the same for all honest members, and all honest members will produce the same output for this phase.
+The inclusion lists from multiple rounds can be processed concurrently, however the results must be emitted from the ordering phase in round order.
 
-  The decryption phases of multiple rounds can be done concurrently.
+An honest member sorts the transactions and bundles in the inclusion list as follows:
 
-  If any of the transactions or bundles in the inclusion list are encrypted, the committee member multicasts its decryption shares for the encrypted items. It then awaits the arrival of decryption shares from other committee members. As soon as it has received *F+1* decryption shares for an encrypted item (including its own share), it can use those shares to decrypt the item.
+- order all priority transactions or bundles ahead of all non-priority transactions
+- among the priority transactions or bundles, order according to the sequence number given by the priority controller, then break up each bundle into its constituent transactions (by SSZ-decoding the payload as a List[List, 1048576], 1024]), maintaining the order from the bundle
+- among the non-priority transactions, order according to Hash(seed || sender address), breaking remaining ties by nonce (increasing), breaking remaining ties by Hash(contents)
+- among the delayed-inbox transactions, order by arrival order in the L1 inbox
 
-  (Note that decryption of a non-priority transaction could lead to duplicate copies of the same transaction, because the result of decryption could be identical to a transaction that is already present. This cannot happen for priority bundles, nor for delayed inbox messages, because they have sequence numbers that have already been de-duplicated.)
+At this point, the ordering phase waits until the ordering phases of all previous rounds have completed, and then:
 
-  As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it first de-duplicates the set of non-priority transactions by removing all but one instance of any transaction that is duplicated in the set, and then the member passes the de-duplicated inclusion list, tagged with the round number, to the next, ordering phase. 
+- Pushes the transactions in order, and timestamped with the consensus timestamp from their inclusion list, into the input queue of the block building engine.
+- Push the indices in the consensus delayed inbox index sequence,  in increasing order, into the input queue of the block building engine. (Note that the interval might be empty.)
 
-  <u>State and recovery in the decryption phase</u>
+This completes the ordering phase for the round.
 
-  The decryption phase is stateless. No state needs to be remembered from one round to the next. So a member can participate in the decryption phase of any round, if it knows the correct inclusion list result for that round.
+<u>State and recovery for the ordering phase</u>
 
-  **Ordering phase**
-
-  Each honest committee member runs a separate instance of the ordering phase. This phase is deterministic, and consumes inputs that will be the same for all honest members, so it will produce the same sequence of outputs for every honest member.
-
-  The ordering phase consumes the inclusion lists produced by the decryption phase, and produces an ordered sequence of timestamped transactions, which are pushed into a queue that will be consumed by the block building engine. 
-
-  The inclusion lists from multiple rounds can be processed concurrently, however the results must be emitted from the ordering phase in round order.
-
-  An honest member sorts the transactions and bundles in the inclusion list as follows:
-
-  - order all priority transactions or bundles ahead of all non-priority transactions
-  - among the priority transactions or bundles, order according to the sequence number given by the priority controller, then break up each bundle into its constituent transactions (by SSZ-decoding the payload as a List[List, 1048576], 1024]), maintaining the order from the bundle
-  - among the non-priority transactions, order according to Hash(seed || sender address), breaking remaining ties by nonce (increasing), breaking remaining ties by Hash(contents)
-  - among the delayed-inbox transactions, order by arrival order in the L1 inbox
-
-  At this point, the ordering phase waits until the ordering phases of all previous rounds have completed, and then:
-
-  - Pushes the transactions in order, and timestamped with the consensus timestamp from their inclusion list, into the input queue of the block building engine.
-  - Push the indices in the consensus delayed inbox index sequence,  in increasing order, into the input queue of the block building engine. (Note that the interval might be empty.)
-
-  This completes the ordering phase for the round.
-
-  <u>State and recovery for the ordering phase</u>
-
-  Each round of the ordering phase is self-contained, and there is no state that needs to be remembered from one round to the next. So a member can execute the ordering phase for any round for which it knows the correct result of the decryption phase.
+Each round of the ordering phase is self-contained, and there is no state that needs to be remembered from one round to the next. So a member can execute the ordering phase for any round for which it knows the correct result of the decryption phase.
 
 **Block building engine**
 
