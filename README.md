@@ -117,7 +117,7 @@ The result of a round is either FAILURE or a block that contains:
 - a predecessor round number $P$
 - a consensus timestamp $T_R$
 - a pair of delayed inbox finality numbers, $I_{R,\mathrm{first}}$ and $I_{R,\mathrm{next}}$
-	- these represent a consecutive sequence of delayed inbox messages, with numbers $[I_{R,\mathrm{first}}, I_{R,\mathrm{next}})
+	- these represent a consecutive sequence of delayed inbox messages, with numbers $[I_{R,\mathrm{first}}, I_{R,\mathrm{next}})$
 	
 - an unordered set $N_R$ of non-priority transactions. A subset of these may be encrypted. If a non-priority transaction is encrypted, then the entire transaction is encrypted as a single ciphertext.
 - an ordered set $B_R$ of priority bundles. A subset of these may be encrypted. If a priority bundle is encrypted, then the payload (i.e. the contents of all transactions contained in the bundle) is encrypted as a single ciphertext, with the other fields of the bundle (including epoch number, sequence number, and signature) remaining in plaintext.
