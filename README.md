@@ -147,13 +147,14 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
   - This ensures that there are no gaps between the $I$ sequences from consecutive rounds
 
 - $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
+- for all $n \in N_R$: $n$ arrived at some honest member before local time $T_R-2d-250\ \mathrm{milliseconds}$
 - the bundles in $B_R$ are sorted in increasing order of sequence number
 - If a bundle $b \in B_R$ and $b$ has epoch $e_b$ and sequence number $s_b$, then:
   - $e_b = \mathrm{epoch}(T_R)$
   - for every round $R' < R$, and every bundle $b' \in B_{R'}$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
     - Across all rounds, bundles are in lexicographic order by (epoch number, sequence number)
   - if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
-    - There are gaps in the sequence numbers included within an epoch.
+    - There are no gaps in the sequence numbers included within an epoch.
 - Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before (universal time) $\tau+250\ \mathrm{milliseconds}$.
 
 Inclusion guarantees:
