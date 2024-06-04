@@ -162,6 +162,10 @@ Inclusion guarantees:
 - If an honest party commits block $R$, let $e = \mathrm{epoch}(T_R)$.  Then for any sequence number $s$, if either $s=0$ or a bundle with epoch $e$ and sequence number $s-1$ is included in $R$ or an earlier round result committed by the same member, and if at least $F+1$ honest members received a bundle with epoch $e$ and sequence number $s$ before $T_R-d$ (according to each such member's local clock), then some bundle with epoch $e$ and sequence number $s$ is included in $B_R$.
   - Note that different members might have received different bundles with the same (epoch, sequence number) values. In that case the guarantee ensures that one of them will be included.
 
+Bounded pipelining guarantee:
+
+* If any honest party commits a result for round $R$ at local time $t$, then the consensus time $T_{R'}$ commited by that same party for any round $R' \ge R+32$ is at least $t-2d$.
+
 
 **Inclusion phase: reference implementation strategy**
 
@@ -181,6 +185,8 @@ When a member constructs its *candidate list* as its input to a consensus round,
   - Consensus timestamp
   - Consensus priority inbox index
   - Next expected priority bundle sequence number (i.e., the value of K+1 that caused the “S is empty” condition to be reached)
+
+A member does not submit its input for round $R+32$ until it has committed a result for round $R$.
 
 Members should make a reasonable best effort to exclude from their candidate lists any transactions or bundles that have already been part of the consensus inclusion list produced by a previous round. (Failures to do so will reduce efficiency but won’t compromise the safety or liveness of the protocol.)
 
