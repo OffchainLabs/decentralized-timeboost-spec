@@ -12,9 +12,9 @@ Assumptions:
     - NOTE: This implies that the clocks of two honest members cannot differ by more than $2d$.
 
 2. The L1 delayed inbox (a contract on the L1 chain) has a finality number, which is non-decreasing.
-3. Each member has a view of the delayed inbox finality number, which satisfies:
-- safety: the member’s view is $\le$ the true number
-- liveness: if the true number is $i$, then the member’s view will eventually be $\ge i$
+3. Each member has a view of this number, which we call its *delayed inbox index*, and which satisfies:
+	- safety: the member’s view is $\le$ the true number
+	- liveness: if the true number is $i$, then the member’s view will eventually be $\ge i$
 
 Round structure:
 
@@ -23,6 +23,7 @@ The inclusion phase proceeds in rounds
 - Each member locally starts rounds in successive order
 - There is a well defined point in time at which any member $m$ starts any given round $R$. We denote by $\mathrm{start}(m,R)$ this start time *with one second resolution, as measured on $m$'s local clock*.
 - An implementation should make a best effort to start rounds at a rate of at least once every 250 milliseconds.
+- For a member $m$ and round $R$,  denote by $\mathrm{index}(m,R)$  delayed inbox index of $m$ at the time $m$ starts round $R$.
 
  
 
@@ -31,19 +32,19 @@ The result of a round is either FAILURE or a block that contains:
 * a round number $R$
 * a predecessor round number $P$
 * a consensus timestamp $T_R$
-* a pair of delayed inbox finality numbers, $I_{R,\mathrm{first}}$ and $I_{R,\mathrm{next}}$
-  * these represent a consecutive sequence of delayed inbox messages, with numbers $[I_{R,\mathrm{first}}, I_{R,\mathrm{next}})$
+* a consensus delayed inbox index $I_R$
 * an unordered set $N_R$ of non-priority transactions. A subset of these may be encrypted. If a non-priority transaction is encrypted, then the entire transaction is encrypted as a single ciphertext.
 * an ordered set $B_R$ of priority bundles. A subset of these may be encrypted. If a priority bundle is encrypted, then the payload (i.e. the contents of all transactions contained in the bundle) is encrypted as a single ciphertext, with the other fields of the bundle (including epoch number, sequence number, and signature) remaining in plaintext.
 
 The result of round number zero is predetermined and is considered to have been committed by all parties. It has:
+
 * $R = 0$
 * $P = 0$
-* $T_R = 0$
-* $I_{0,\mathrm{first}} = I_{0,\mathrm{next}} = I_\mathrm{init}$, where $I_\mathrm{init}$ is set administratively
-  - $I_\mathrm{init}$ is the first delayed inbox message that needs to be sequenced by this protocol instance
-* $N_R = \emptyset$
-* $B_R = \emptyset$
+* $T_0 = 0$
+* $I_0$ is set administratively
+  - $I_0$ is the first delayed inbox index that needs to be sequenced by this protocol instance
+* $N_0 = \emptyset$
+* $B_0 = \emptyset$
 
 Standard consensus properties:
 
@@ -66,11 +67,9 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
 
 9. $T_R \le \max(T_P, \mathrm{start}(m',R))$ for some honest member $m'$
 
-10. $I_\mathrm{R,\mathrm{first}} = I_{P,\mathrm{next}}$
+10. $I_R \ge \max(I_P, \mathrm{index}(m,R))$ for some honest member $m$
 
-    * Note: This ensures that there are no gaps between the $I$ sequences from consecutive rounds
-
-11. $I_{R,\mathrm{first}} \le I_{R,\mathrm{next}} \le I$ where $I$ is the true L1 delayed inbox finality number
+11. $I_R \le \max(I_P, \mathrm{index}(m',R))$ for some honest member $m'$
 
 12. the bundles in $B_R$ are sorted in increasing order of sequence number
 
@@ -93,7 +92,7 @@ Inclusion guarantees:
     there exists a non-priorty transaction $n$ such that each honest party receives $n$ at least 250 milliseconds before it starts round $R$. Then $n$ should be included in round $R$ (or an earlier round). 
     * This is a "best effort" requirement, in that it may fail to attain in periods of unexpectedly high demand
 16. Suppose a block is committed in round $R$. Suppose that there exists an epoch number $e$ such that $\mathrm{epoch}(\mathrm{start}(m,R))=e$ for each honest member $m$. Let $s$ be a sequence number. Assume that either $s=0$ or a bundle with epoch $e$ and sequence number $s-1$ is included in round $R$ or an earlier round. Assume that there is a set $S$ of $F+1$ honest members such that each $m \in S$ receives a bundle with epoch $e$ and sequence number $s$ before it starts round $R$. Then some bundle with epoch $e$ and sequence number $s$ is included in round $R$ (or an earlier round).
-    * Note that the assumption "$\mathrm{epoch}(\mathrm{start}(m,R))=e$ for each honest member $m$" implies that $\mathrm{epoch}(T_R) = e$
+    * Note that the assumption that $\mathrm{epoch}(\mathrm{start}(m,R))=e$ for each honest member $m$ implies that $\mathrm{epoch}(T_R) = e$
     * This assumption also implies that for each $m \in S$ will also view the current epoch number as $e$ when it starts round $R$
     * Alternatively, we could make the weaker assumption that $\mathrm{epoch}(T_R) = e$ and that $\mathrm{epoch}(\mathrm{start}(m,R))=e$ for all $m \in S$
     * Note that different members might have received different bundles with the same (epoch, sequence number) values. In that case the guarantee ensures that one of them will be included
@@ -109,7 +108,7 @@ In each round of the consensus sub-protocol, each committee member submits a can
 When a member $m$ constructs its *candidate list* as its input to a consensus round $R$, it includes all of the following in its candidate list:
 
 * $m$'s current timestamp, which defines $\mathrm{start}(m,R)$ 
-* $m$'s view of the largest index of any delayed inbox message that has reached finality on the parent chain
+* $m$'s current delayed inbox index, which defines $\mathrm{index}(m,R)$
 * all priority bundle transactions from the priority epoch $e=\mathrm{epoch}(\mathrm{start}(m,R))$ that the member has seen,
 * all non-priority transactions that arrived at this member at least 250 milliseconds ago, 
 * [to help crashed/restarted nodes recover:] information about (the member’s view of) the latest consensus inclusion list that was produced by a previous round:
@@ -126,12 +125,12 @@ When the consensus sub-protocol commits a result, all honest members use this co
 * A consensus timestamp, which is the maximum of:
   * the consensus timestamp of the latest successful round, and
   * the median of the timestamps of the candidate lists output by the consensus protocol
-    * if there are an even number of candidate lists, define the median as the floor of the mean of the two central items
+    * if there are an even number of candidate lists, define the median as the *floor* of the mean of the two central items
 * A consensus priority epoch number, which is computed from the consensus timestamp
 * A consensus delayed inbox index, which is the maximum of:
-* the consensus delayed inbox index of the latest successful round, and
-* the median of the delayed inbox indexes of the candidate lists output by the consensus protocol	
-* A (possibly empty) sequence of delayed inbox indices, consisting of the interval `(prev, current]` where `prev` is the consensus delayed inbox index of the latest successful round, and `current` is the consensus delayed inbox index of this round.
+  * the consensus delayed inbox index of the latest successful round, and
+  * the median of the delayed inbox indexes of the candidate lists output by the consensus protocol
+    * if there are an even number of candidate lists, define the median as the *floor* of the mean of the two central items
 * Among all priority bundle transactions seen in the consensus output that are tagged with the current consensus epoch number, first discard any that are not from the current consensus epoch and any that are not properly signed by the priority controller for the current epoch. Then include those that are designated as included by this procedure:
   * Let K be the largest sequence number of any bundle from the current consensus epoch number that has been included by a previous successful round’s invocation of this procedure, or -1 if there is no such bundle
   * Loop:
@@ -146,10 +145,9 @@ The resulting list is called the *consensus inclusion list* for the round. All h
 
 If a non-priority transaction appears in at least one of the candidate lists, but fewer than $F+1$, then the transaction will not be included in the consensus inclusion list. But honest members who have not previously received such a transaction must treat such a transaction as received. 
 
-Notes:
 
-1. Some messages that were included in the submitted candidate lists may not qualify for inclusion in the round’s consensus inclusion list. An honest committee member who has not yet seen such a message will now have seen it, so will include it in later rounds’ inputs. Eventually such a message will make it into some round’s consensus inclusion list.
-- Members must keep the following state between rounds: the number of the last successful round; the consensus timestamp of that round; the consensus delayed inbox index of that round; the next expected priority bundle sequence number at the end of that round (i.e. the value of K+1 that caused the “S is empty” condition). This information is included in the input, to help crashed/restarted members get back into sync.
+NOTE: Some messages that were included in the submitted candidate lists may not qualify for inclusion in the round’s consensus inclusion list. An honest committee member who has not yet seen such a message will now have seen it, so will include it in later rounds’ inputs. Eventually such a message will make it into some round’s consensus inclusion list.
+
 
 <u>State management and recovery after a crash</u>
 
