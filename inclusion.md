@@ -21,7 +21,7 @@ Round structure:
 The inclusion phase proceeds in rounds
 
 - Each member locally starts rounds in successive order
-- There is a well defined point in time at which any member $m$ starts any given round $R$. We denote by $\mathrm{start}(m,R)$ this start time *with one second resolution, as measured on $m$'s local clock*.
+- There is a well defined point in time at which any member $m$ starts any given round $R$. We denote by $\mathrm{start}(m,R)$ this start time with one second resolution, as measured on $m$'s local clock.
 - An implementation should make a best effort to start rounds at a rate of at least once every 250 milliseconds.
 - For a member $m$ and round $R$,  denote by $\mathrm{index}(m,R)$  delayed inbox index of $m$ at the time $m$ starts round $R$.
 
@@ -49,27 +49,29 @@ The result of round number zero is predetermined and is considered to have been 
 Standard consensus properties:
 
 1. If an honest member has committed a result for round $R > 0$, then it has committed a result for round $R-1$.
+	- Note: strictly speaking, this condition may not hold in a dynamic committee setting where a new member joins the committee
 1. If two honest members both commit a result for round $R$, then they commit the same result.
 1. A result will eventually be committed for each round $R > 0$
 1. Under well-defined and standard "optimistic" conditions (e.g., intervals of synchrony), consensus will commit blocks (rather than FAILURE).
 
 An additional property we require is this:  
 
-5. For a round $R > 0$, no honest member commits a result for round $R$ or starts round $R+1$ before at least $N-2F$ honest members have started round $R$.
+5. For a round $R > 0$, if a non-FAILURE result for round $R$ is committed by some honest member, then at the first point in time where this happens, the set of honest members who have started round $R$, which we denote by $\mathrm{Starters}(R)$, must be of size at least $N-2F$. 
 
-If a non-FAILURE result has been committed by an honest member for a round $R > 0$, then at the time of commitment and all later times, the result satisfies these properties:
+
+If a non-FAILURE result has been committed by an honest member for a round $R > 0$, then the result satisfies these properties:
 
 6. $P < R$
 
 7. for all $i$ such that $P < i < R$: the member committed FAILURE as the result of round $i$
 
-8. $T_R \ge \max(T_P, \mathrm{start}(m,R))$ for some honest member $m$
+8. $T_R \ge \max(T_P, \mathrm{start}(m,R))$ for some $m \in \mathrm{Starters}(R)$
 
-9. $T_R \le \max(T_P, \mathrm{start}(m',R))$ for some honest member $m'$
+9. $T_R \le \max(T_P, \mathrm{start}(m',R))$ for some $m' \in \mathrm{Starters}(R)$
 
-10. $I_R \ge \max(I_P, \mathrm{index}(m,R))$ for some honest member $m$
+10. $I_R \ge \max(I_P, \mathrm{index}(m,R))$ for some $m \in \mathrm{Starters}(R)$
 
-11. $I_R \le \max(I_P, \mathrm{index}(m',R))$ for some honest member $m'$
+11. $I_R \le \max(I_P, \mathrm{index}(m',R))$ for some $m' \in \mathrm{Starters}(R)$
 
 12. the bundles in $B_R$ are sorted in increasing order of sequence number
 
@@ -78,18 +80,18 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
     * $e_b = \mathrm{epoch}(T_R)$
 
     * for every round $R' < R$, and every bundle $b' \in B_{R'}$, either $e_{b'} < e_b$ or ($e_{b'} = e_b$ and $s_{b'} < s_b$)
-      * Across all rounds, bundles are in lexicographic order by (epoch number, sequence number)
+      * Note: this says that across all rounds, bundles are in lexicographic order by (epoch number, sequence number)
     * if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
       	- Note: This says that there are no gaps in the sequence numbers included within an epoch
 
-14. Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at when $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before (universal) time $\tau+250\ \mathrm{milliseconds}$.
+14. Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at which $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before (universal) time $\tau+250\ \mathrm{milliseconds}$.
 
     * Note: This says that priority bundles indeed take priority over non-priority transactions
 
 Inclusion guarantees:
 
 15. Suppose a block is committed in round $R > 0$. Suppose that 
-    there exists a non-priorty transaction $n$ such that each honest party receives $n$ at least 250 milliseconds before it starts round $R$. Then $n$ should be included in round $R$ (or an earlier round). 
+    there exists a non-priority transaction $n$ such that each honest party receives $n$ at least 250 milliseconds before it starts round $R$. Then $n$ should be included in round $R$ (or an earlier round). 
     * This is a "best effort" requirement, in that it may fail to attain in periods of unexpectedly high demand
 16. Suppose a block is committed in round $R$. Suppose that there exists an epoch number $e$ such that $\mathrm{epoch}(\mathrm{start}(m,R))=e$ for each honest member $m$. Let $s$ be a sequence number. Assume that either $s=0$ or a bundle with epoch $e$ and sequence number $s-1$ is included in round $R$ or an earlier round. Assume that there is a set $S$ of $F+1$ honest members such that each $m \in S$ receives a bundle with epoch $e$ and sequence number $s$ before it starts round $R$. Then some bundle with epoch $e$ and sequence number $s$ is included in round $R$ (or an earlier round).
     * Note that the assumption that $\mathrm{epoch}(\mathrm{start}(m,R))=e$ for each honest member $m$ implies that $\mathrm{epoch}(T_R) = e$
