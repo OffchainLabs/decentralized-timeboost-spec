@@ -9,7 +9,7 @@
 
 **Assumptions:**
 
-- sequencer committee of *N* nodes, of which at most *F < N/3* are byzantine malicious
+- sequencer committee of *N* nodes, of which at most *F < N/3* are byzantine malicious; the quorum size *Q = ceil((N+F+1)/2)* so that any two quorums must have an honest member in common
   - members are chosen so that the community trusts at least N-F members are honest
 - each committee member has a clock with one-second granularity, and the clocks of honest nodes are roughly in sync
 - time is divided into epochs of 60 seconds each, with epoch *i* starting at timestamp *60i* and lasting until timestamp *60i+59*, The function $\mathrm{epoch}(t)$ returns the epoch number to which timestamp $t$ belongs.
@@ -63,23 +63,59 @@ Transactions submitted to addresses other than *PriorityAddr* are called *non-pr
 
 **Configuration and key management**
 
-The protocol's configuration is managed and stored by a smart contract on the parent chain. The configuration consists of:
+The protocol uses two sets of keys: signing keys and threshold decryption keys. Signing keys are used to authenticate messages from members, and to sign quorum certificates. Threshold decryption keys are used for the threshold decryption functionality as described below.
 
-* the number of committee members, N
-* the (assumed) maximum number of malicious members, F, which must satisfy 3F < N,
-* a public signature verification key for each committee member, in a signature scheme such as BLS which supports signature aggregation,
-* all public key and configuration information for the threshold encryption scheme,
-* an additional address (in addition to the chain owner) that can exercise the owner's privileges in this configuration contract; this can be set to address zero if not needed
+The authoritative source of information about keys is the *key management contract*, a smart contract on the parent chain.  Users of the protocol, and the committee members themselves, rely on the key management contract for information about currently valid keys and any scheduled key changes.
 
-The chain's owner, or the specified additional address, is allowed to:
+Actions that change the state of the key management contract may be done only by chain governance or by the key manager address, an address which can be changed only by chain governance.
 
-* change the additional address only, with immediate effect, or
+Implementation notes:
 
-* schedule a change to the entire configuration, which must be scheduled for a future timestamp.
+* The governance and key manager addresses can hold multi-sigs or other authorization structures, so arbitrary authorization policies can be used.
+* Information about how to connect to committee members must be available to everyone out-of-band, e.g., published as a json string at a well-known URL.
 
-The smart contract will allow anyone to read the full configuration (or parts of it, for convenience), and to see any scheduled configuration change (both the scheduled timestamp and the full contents of the change).
+<u>Managing signing keys</u>
 
-Information about how to connect to committee members must be available to everyone out-of-band, e.g., published as a json string at a well-known URL.
+The protocol uses a signature scheme that supports threshold aggregation of signatures, so that Q signature shares are sufficient to produce a quorum signature.
+
+These keys and this signature scheme are used in the core consensus protocol to authenticate messages. They are also used to produce quorum certificates on the blocks produced by the protocol.
+
+The key management contract keeps track of the current keyset, along with a future keyset with a starting timestamp for when that future keyset will become active. (The future keyset and its starting timestamp may be null, if no keyset change has been scheduled.)
+
+A signature keyset consists of:
+
+* the quroum size
+* a share verification key for each member, allowing to validate that member's signature share
+* a quorum verification key, allowing to verify a quorum signature
+
+Chain governance or the key manager address can:
+
+* schedule a change to a new signature keyset, by submitting to the key management contract the new keyset along with a timestamp when it will be scheduled to take effect; this timestamp must be at least ten minutes in the future
+  * only one scheduled keyset update can be pending in the contract at a time; if a keyset update request is sent to the contract and there is already a keyset update pending on the schedule, then the new update can replace the old scheduled one, provided that the old one's start time is more than ten minutes in the future
+  * implementation note: These rules ensure that everyone has at least ten minutes of advance notice before a keyset change. So it should be sufficient for interested parties to check the key management contract for changes every five minutes.
+
+Design note: A new signature keyset takes effect at a scheduled timestamp. This has two consequences:
+
+* The quorum certificate for a block will always be correctly created, because each block has a timestamp so it will be clear which committee should be signing each block
+* The core consensus protocol must manage its rounds such that all rounds are produced by the committee corresponding to that round's timestamp. In practice, on a committee change, the new committee will have to wait for some kind of signal from the old committee that the old committee will not produce any more rounds within the old committee's timestamp range.
+
+<u>Managing threshold decryption keys</u>
+
+The protocol uses a CCA-secure threshold decryption scheme. For this scheme, a "keyset" consists of:
+
+* a keyset ID, which is a unique 8-byte string assigned by the key management contract,
+* a starting timestamp for this keyset; the keyset will be considered invalid in protocol rounds with timestamps less than this timestamp
+* the scheduled "sunset timestamp" for this keyset; the keyset will be considered invalid in protocol rounds with timestamps greater than or equal to this sunset timestamp
+  * this can be set to "infinity" if no sunset has been scheduled yet
+* the key material needed to encrypt to the set
+
+Chain governance or the key manager address can:
+
+* create new keysets, provided that the starting timestamp of a new keyset is at least ten minutes in the future,
+* change the sunset timestamp of a keyset, provided that the previous sunset value and the new sunset value are both at least ten minutes in the future
+* delete a keyset, provided its sunset timestamp is at least ten minutes in the past
+
+At any given time, multiple keysets may be valid.  Every ciphertext for threshold decryption is prepended with the 8-byte keyset ID of the keyset used to encrypt it.
 
 **Overview of the sequencing protocol**
 
