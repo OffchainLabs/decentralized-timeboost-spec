@@ -25,16 +25,6 @@ Many users are expected to rely on intermediaries to encrypt their transactions 
 
 Members may discard any received transaction that is clearly invalid and cannot become valid within the next minute. They may also discard any received transaction after one minute if that transaction has not progressed in the protocol.
 
-**Background: BFT consensus sub-protocol**
-
-The protocol relies on a consensus sub-protocol, which implements the following functionality. 
-
-In each round, every honest member submits a message. If the round succeeds, all honest members receive the same result, which consists of messages submitted in the round by *N-F* of the members. Or the round can report failure.
-
-Multiple rounds can be in progress at the same time–a round can start before previous rounds have completed–but the rounds must start in order and complete in order. 
-
-The details of the consensus sub-protocol are not specified here.
-
 **Background: threshold decryption**
 
 The protocol relies on a CCA-secure threshold encryption scheme that is not specified here. Transactions and bundles can be submitted in encrypted form, and these will be decrypted jointly by the members after their position in the sequencer’s output can no longer be manipulated.
@@ -147,10 +137,6 @@ If any of the transactions or bundles in the inclusion list are encrypted, the c
 
 As soon as the member has decrypted all of the encrypted items in the inclusion list (or immediately, if there were no encrypted items), it first de-duplicates the set of non-priority transactions by removing all but one instance of any transaction that is duplicated in the set, and then the member passes the de-duplicated inclusion list, tagged with the round number, to the next, ordering phase. 
 
-<u>State and recovery in the decryption phase</u>
-
-The decryption phase is stateless. No state needs to be remembered from one round to the next. So a member can participate in the decryption phase of any round, if it knows the correct inclusion list result for that round.
-
 **Ordering phase**
 
 Each honest committee member runs a separate instance of the ordering phase. This phase is deterministic, and consumes inputs that will be the same for all honest members, so it will produce the same sequence of outputs for every honest member.
@@ -173,10 +159,6 @@ At this point, the ordering phase waits until the ordering phases of all previou
 
 This completes the ordering phase for the round.
 
-<u>State and recovery for the ordering phase</u>
-
-Each round of the ordering phase is self-contained, and there is no state that needs to be remembered from one round to the next. So a member can execute the ordering phase for any round for which it knows the correct result of the decryption phase.
-
 **Block building engine**
 
 Each honest committee member runs an instance of the block building engine.
@@ -185,7 +167,7 @@ The job of the block building engine is to consume timestamped transactions from
 
 This would use the ProduceBlockAdvanced function in the Nitro code, or something similar. However, this operation must be deterministic, which probably requires updates to the existing code, for example to use the timestamps on transactions rather than reading the current clock.
 
-This phase may optionally (but identically for all members) include a nonce reordering cache, which remembers transactions that would generate nonce-too-large errors, in the hope that the missing nonce will arrive soon, allowing the erroring transaction to be re-sequenced successfully. (This corrects for out-of-order arrival of transactions.) The cache operates as follows:
+This phase may optionally (but for either all members or no members) include a nonce reordering cache, which remembers transactions that would generate nonce-too-large errors, in the hope that the missing nonce will arrive soon, allowing the erroring transaction to be re-sequenced successfully. (This corrects for out-of-order arrival of transactions.) The cache operates as follows:
 
 * Any transaction that cannot execute successfully because of a nonce-too-large error is added to the cache.
 * The cache holds up to 64 entries. If 64 entries are present and one needs to be added, the entry that was inserted earliest is discarded.
@@ -196,7 +178,3 @@ This phase may optionally (but identically for all members) include a nonce reor
 All honest members will see the same sequence of transactions in their local input queue, and this phase is deterministic, so honest members can do this phase independently and asynchronously, and they are guaranteed to produce the same sequence of blocks.
 
 Honest members sign the hashes of the blocks they produce, and multicast their signature shares. *F+1* signature shares can be aggregated to make a quorum certificate for the block. (This is sufficient because at least one of the signers is honest, and therefore an honest member must have signed the blocks that result from correct processing of the unique result of the inclusion round.)
-
-<u>State and recovery for the block building engine</u>
-
-[TO DO. The main issue here is how to get the nonce re-ordering cache into sync.]
