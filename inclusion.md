@@ -84,7 +84,8 @@ If a non-FAILURE result has been committed by an honest member for a round $R > 
     * if $s_b \ne 0$, then there is some $R' \le R$ and  $b' \in B_{R'}$ such that $e_{b'} = e_b$ and $s_{b'} = s_b-1$ 
       	- Note: This says that there are no gaps in the sequence numbers included within an epoch
 
-14. Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at which $n$ first arrived at any honest member. Then there is some $s \le s_b$ such that bundles with epoch $e_b$ and sequence number $s$ arrived at fewer than $F+1$ honest members before (universal) time $\tau+250\ \mathrm{milliseconds}$.
+14. Let $n$ be a non-priority transaction that is included in the result of round $R$, and $b$ be a priority bundle that is included in the result of round $R' > R$. Let $b$ have epoch number $e_b$ and sequence number $s_b$. Let $\tau$ be the (universal) time at which $n$ first arrived at any honest member. Then there is some $s \le s_b$
+and some honest member $M$ such that no bundle with epoch $e_b$ and sequence number $s$ arrived at $M$ before (universal) time $\tau+250\ \mathrm{milliseconds}$.
 
     * Note: This says that priority bundles indeed take priority over non-priority transactions
 
